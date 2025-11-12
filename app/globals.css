@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 :root { --chat-max: 920px; }
-body { @apply bg-gray-100 text-gray-900; }
 
 /* SMS-like bubble tails */
 .bubble:after {
@@ -14,7 +13,7 @@ body { @apply bg-gray-100 text-gray-900; }
 }
 .bubble.me:after {
   right: -6px;
-  border-left: 6px solid #0b93f6;
+  border-left: 6px solid var(--bubble-me, #0b93f6);
   border-top: 6px solid transparent;
   border-bottom: 6px solid transparent;
 }

@@ -1,9 +1,15 @@
-# SMS-Style Group Chat — OPTIMISTIC + RETRY BUILD (v1.0.4)
+# SMS-Style Group Chat — v1.0.5
 
-Fixes:
-- **Optimistic messages:** your text shows instantly on your tab.
-- **Outbox queue:** messages typed before subscribe are saved and sent once connected.
-- **Auto-reconnect:** if subscribe stalls, it retries.
-- **Local persistence:** name, font, color, status, custom statuses, and device uid persist through refresh.
+**Fixes & features:**
+- No duplicate self-messages (self echo disabled + dedupe by id)
+- Your messages always **right-aligned** and show **your name** above the bubble
+- Sidebar shows **currently online** users with status
+- **Dark mode** switch (persisted)
+- **Bubble color picker** for your own bubbles (persisted)
+- Optimistic UI + outbox; local persistence for name/font/color/status/custom statuses
 
-Still no database (temporary/live-only). Set env vars and deploy on Vercel.
+Env on Vercel:
+```
+NEXT_PUBLIC_SUPABASE_URL= https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY= your anon key
+```
