@@ -90,17 +90,10 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<UserPresence[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const typingRef = useRef<NodeJS.Timeout | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
-
-    const [subscribed, setSubscribed] = useState(false);
-  const hasTrackedRef = useRef(false);
-  
-  const updateUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
-    if (!chInst) return;
+  // ---- Stable presence manager (prevents flicker) ----
+  const usersHashRef = useRef<string>("");
+  function calcUsers(chInst: any): UserPresence[] {
     const state = chInst.presenceState() as Record<string, any[]>;
     const flat: UserPresence[] = Object.values(state)
       .flat()
@@ -112,7 +105,40 @@ export default function Chat() {
         status: p.status,
         typing: p.typing,
       }));
+    // Always include self as a fallback
+    const hasMe = flat.some(u => u.userId === userId);
+    if (!hasMe) {
+      flat.push({
+        userId,
+        name: profile.name,
+        fontFamily: profile.fontFamily,
+        color: profile.color,
+        status: profile.status,
+        typing: false,
+      });
+    }
     flat.sort((a, b) => a.name.localeCompare(b.name));
+    return flat;
+  }
+  function stableSetUsers(chInst: any) {
+    if (!chInst) return;
+    const next = calcUsers(chInst);
+    const hash = JSON.stringify(next.map(u => [u.userId, u.name, u.status]));
+    if (hash !== usersHashRef.current) {
+      usersHashRef.current = hash;
+      setUsers(next);
+    }
+  }
+  const [error, setError] = useState<string | null>(null);
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingRef = useRef<NodeJS.Timeout | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+    const [subscribed, setSubscribed] = useState(false);
+  const hasTrackedRef = useRef(false);
+  
+      flat.sort((a, b) => a.name.localeCompare(b.name));
     setUsers(flat);
   }, []);
 
@@ -139,29 +165,17 @@ export default function Chat() {
         setMsgIds((prev) => new Set(prev).add(m.id));
         setMessages((prev) => [...prev, { ...m, isSelf: m.userId === userId }]);
               })
-      .on("presence", { event: "sync" }, () => {
-        updateUsers(ch);
-        if (!hasTrackedRef.current) {
-          try {
-            ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
+      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); });
             hasTrackedRef.current = true;
           } catch {}
         }
               })
-      .on("presence", { event: "join" }, () => {
-        updateUsers(ch);
-        if (!hasTrackedRef.current) {
-          try {
-            ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
+      .on("presence", { event: "join" }, () => { stableSetUsers(ch); });
             hasTrackedRef.current = true;
           } catch {}
         }
               })
-      .on("presence", { event: "leave" }, () => {
-        updateUsers(ch);
-        if (!hasTrackedRef.current) {
-          try {
-            ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
+      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); });
             hasTrackedRef.current = true;
           } catch {}
         }
@@ -177,7 +191,7 @@ export default function Chat() {
             status: profile.status,
             typing: false
           });
-          updateUsers(ch);
+          stableSetUsers(ch);
         if (!hasTrackedRef.current) {
           try {
             ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
@@ -255,6 +269,27 @@ try { ch.unsubscribe(); } catch {}
   };
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    if (!channel || !subscribed) return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        try {
+          channel.track({
+            userId,
+            name: profile.name,
+            fontFamily: profile.fontFamily,
+            color: profile.color,
+            status: profile.status,
+            typing: false
+          });
+          stableSetUsers(channel);
+        } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [channel, subscribed, userId, profile.name, profile.fontFamily, profile.color, profile.status]);
+
 
   if (error) return <ErrorPanel title="Application needs configuration" details={error} />;
   if (!supabase) return <div className="p-6 text-sm text-gray-600 dark:text-neutral-300">Initializing…</div>;
