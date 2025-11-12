@@ -6,7 +6,16 @@ import SidebarUsers, { UserPresence } from "./SidebarUsers";
 import MessageBubble, { Message } from "./MessageBubble";
 import ErrorPanel from "./ErrorPanel";
 import { clsx } from "clsx";
+import { FONT_OPTIONS } from "@/lib/fonts";
 
+type Profile = {
+  name: string;
+  fontFamily: string;
+  color: string; // css color for text
+  bubble: string; // my bubble background
+  status?: string;
+  show_status_bar?: boolean;
+};
 
 const LS_PROFILE = "sms_groupchat_profile_v3";
 const LS_UID = "sms_groupchat_uid_v3";
@@ -14,161 +23,98 @@ const LS_OUTBOX = "sms_groupchat_outbox_v2";
 const LS_THEME = "sms_groupchat_theme";
 const LS_ROSTER = "sms_groupchat_roster_v1";
 
-const DEFAULT_FONTS = [
-  "Inter, system-ui, sans-serif",
-  "Arial, Helvetica, sans-serif",
-  "Georgia, serif",
-  "Courier New, monospace",
-  "Comic Sans MS, cursive",
-  "Trebuchet MS, sans-serif",
-  "Times New Roman, serif",
-  "Verdana, sans-serif",
-];
-
-function uid() { return Math.random().toString(36).slice(2); }
-
-type Profile = {
-  name: string;
-  fontFamily: string;
-  color: string;
-  status: string;
-  customStatuses: string[];
-  bubble: string; // my bubble color
-};
-
-type OutboxItem = { id: string; payload: Message };
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
 
 export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
-  const ROOM = `room:${roomCode}`;
-  // theme toggle
+  // theme
   const [theme, setTheme] = useState<string>(() => {
     if (typeof window === "undefined") return "light";
-    return (localStorage.getItem(LS_THEME) as string) || "light";
-  const [showSidebar, setShowSidebar] = useState(false);
-useEffect(() => {
-    if (typeof document !== "undefined") {
-      const el = document.documentElement;
-      if (theme === "dark") el.classList.add("dark");
-      else el.classList.remove("dark");
-      localStorage.setItem(LS_THEME, theme);
-    }
+    return localStorage.getItem(LS_THEME) || "light";
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem(LS_THEME, theme);
   }, [theme]);
 
-  const [userId] = useState<string>(() => {
-    if (typeof window === "undefined") return uid();
-    const existing = localStorage.getItem(LS_UID);
-    if (existing) return existing;
-    const id = uid();
-    localStorage.setItem(LS_UID, id);
-    return id;
-  const defaultProfile: Profile = {
-    name: `Guest-${Math.floor(Math.random()*999)}`,
-    fontFamily: DEFAULT_FONTS[0],
-    color: "#111827",
-    status: "",
-    customStatuses: [],
-    bubble: "#0b93f6",
-  };
+  const [showSidebar, setShowSidebar] = useState(false);
 
-  const [profile, setProfile] = useState<Profile>(() => {
-    if (typeof window === "undefined") return defaultProfile;
-    const raw = localStorage.getItem(LS_PROFILE);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as Partial<Profile>;
-        return { ...defaultProfile, ...parsed, bubble: parsed.bubble ?? defaultProfile.bubble };
-      } catch {}
-    }
-    return defaultProfile;
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem(LS_PROFILE, JSON.stringify(profile));
-  }, [profile]);
-
-  const [outbox, setOutbox] = useState<OutboxItem[]>(() => {
-    if (typeof window === "undefined") return [];
-    const raw = localStorage.getItem(LS_OUTBOX);
-    if (!raw) return [];
-    try { return JSON.parse(raw) as OutboxItem[]; } catch { return []; }
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem(LS_OUTBOX, JSON.stringify(outbox));
-  }, [outbox]);
-
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
-  const [users, setUsers] = useState<UserPresence[]>([])
-  const [roster, setRoster] = useState<Record<string, any>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`);
-  const people: any[] = Object.values(roster).sort(
-    (a: any, b: any) =>
-      (Number(b.online) - Number(a.online)) ||
-      ((a.name || "").localeCompare(b.name || ""))
-  );
-
+  // client
+  const supabase = useMemo(() => getSupabase(), []);
   const [error, setError] = useState<string | null>(null);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const typingRef = useRef<NodeJS.Timeout | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  // id
+  const [userId] = useState<string>(() => {
+    if (typeof window === "undefined") return uid();
+    let v = localStorage.getItem(LS_UID);
+    if (!v) { v = uid(); localStorage.setItem(LS_UID, v); }
+    return v;
+  });
 
-  const [subscribed, setSubscribed] = useState(false);
-  const hasTrackedRef = useRef(false);
+  // profile
+  const [profile, setProfile] = useState<Profile>(() => {
+    if (typeof window === "undefined") return { name: "Anon", fontFamily: "Inter, sans-serif", color: "#111827", bubble: "#DCF8C6" };
+    try {
+      const raw = localStorage.getItem(LS_PROFILE);
+      return raw ? JSON.parse(raw) : { name: "Anon", fontFamily: "Inter, sans-serif", color: "#111827", bubble: "#DCF8C6" };
+    } catch { return { name: "Anon", fontFamily: "Inter, sans-serif", color: "#111827", bubble: "#DCF8C6" }; }
+  });
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem(LS_PROFILE, JSON.stringify(profile)); }, [profile]);
 
-  const supabase = useMemo(() => {
-    const c = getSupabase();
-    if (!c) setError("Missing Supabase environment variables.");
-    return c;
-  }, []);
-
+  // DM / channel
   const [dmTarget, setDmTarget] = useState<UserPresence | null>(null);
+  const ROOM = `room:${roomCode}`;
+  const channelName = dmTarget ? ("dm:" + [userId, (dmTarget?.userId || "")].sort().join("-")) : ROOM;
   const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
 
-  // ---- Stable presence helpers ----
-  const usersHashRef = useRef<string>("");
-  const calcUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
-    const state = chInst.presenceState() as Record<string, any[]>;
-    const flat: UserPresence[] = Object.values(state)
-      .flat()
-      .map((p: any) => ({
-        userId: p.userId,
-        name: p.name,
-        fontFamily: p.fontFamily,
-        color: p.color,
-        status: p.status,
-        typing: p.typing,
-      }));
-    // Always include self as a fallback
-    const hasMe = flat.some(u => u.userId === userId);
-    if (!hasMe) {
-      flat.push({
-        userId,
-        name: profile.name,
-        fontFamily: profile.fontFamily,
-        color: profile.color,
-        status: profile.status,
-        typing: false,
-      });
-    }
-    flat.sort((a, b) => a.name.localeCompare(b.name));
-    return flat;
-  }, [profile.name, profile.fontFamily, profile.color, profile.status, userId]);
+  // messages
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
 
+  // presence
+  const [users, setUsers] = useState<UserPresence[]>([]);
+  const [roster, setRoster] = useState<Record<string, any>>(() => {
+    if (typeof window === "undefined") return {};
+    try { const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+  });
+  const people: UserPresence[] = useMemo(() => {
+    const stateUsers = users.map(u => ({ ...u }));
+    const hasMe = stateUsers.some(u => u.userId === userId);
+    if (!hasMe) {
+      stateUsers.push({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
+    }
+    // merge stored roster to show offline folks
+    for (const id of Object.keys(roster)) {
+      if (!stateUsers.some(u => u.userId === id)) {
+        const r = roster[id];
+        stateUsers.push({ userId: id, name: r.name || "User", fontFamily: r.fontFamily || "Inter, sans-serif", color: r.color || "#374151", status: r.status || "", typing: false });
+      }
+    }
+    stateUsers.sort((a,b) => a.name.localeCompare(b.name));
+    return stateUsers;
+  }, [users, roster, userId, profile.name, profile.fontFamily, profile.color, profile.status]);
+
+  const saveRoster = useCallback((next: Record<string, any>) => {
+    try { localStorage.setItem(`${LS_ROSTER}_${roomCode}`, JSON.stringify(next)); } catch {}
+  }, [roomCode]);
+
+  // helpers
   const stableSetUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
     if (!chInst) return;
-    const next = calcUsers(chInst);
-    const hash = JSON.stringify(next.map(u => [u.userId, u.name, u.status]));
-    if (hash !== usersHashRef.current) {
-      usersHashRef.current = hash;
-      setUsers(next);
-    }
-  }, [calcUsers]);
+    try {
+      const state = chInst.presenceState() as Record<string, any[]>;
+      const flat: UserPresence[] = [];
+      Object.values(state).forEach((arr:any) => (arr as any[]).forEach((p:any) => {
+        flat.push({ userId: p.userId, name: p.name, fontFamily: p.fontFamily, color: p.color, status: p.status, typing: p.typing });
+      }));
+      setUsers(flat);
+    } catch {}
+  }, []);
 
-  // Channel setup
+  // connect channel
   useEffect(() => {
-    if (!supabase) return;
-    const channelName = dmTarget ? ("dm:" + [userId, ((dmTarget as any)?.userId || "")].sort().join("-")) : ROOM;
+    if (!supabase) { setError("Missing Supabase environment variables."); return; }
     const ch = supabase.channel(channelName, { config: { broadcast: { self: false }, presence: { key: userId } } });
     setChannel(ch);
 
@@ -176,120 +122,71 @@ useEffect(() => {
       .on("broadcast", { event: "message" }, ({ payload }) => {
         const m = payload as Message;
         if (msgIds.has(m.id)) return;
-        setMsgIds((prev) => new Set(prev).add(m.id));
-        setMessages((prev) => [...prev, { ...m, isSelf: m.userId === userId }]);
-
+        setMsgIds(prev => new Set(prev).add(m.id));
+        setMessages(prev => [...prev, { ...m, isSelf: m.userId === userId }]);
+      })
       .on("broadcast", { event: "delete" }, ({ payload }) => {
         const { id } = payload as { id: string };
         setMessages(prev => prev.filter(m => m.id !== id));
       })
-      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); 
-        // Update roster from presence
+      .on("presence", { event: "sync" }, () => {
+        stableSetUsers(ch);
         try {
           const st = ch.presenceState() as Record<string, any[]>;
           const onlineIds = new Set<string>();
-          Object.values(st).forEach(arr => (arr as any[]).forEach(p => { onlineIds.add(p.userId); }));
+          Object.values(st).forEach((arr:any[]) => arr.forEach((p:any) => { onlineIds.add(p.userId); }));
           const next = { ...roster } as any;
-          Object.values(st).forEach(arr => (arr as any[]).forEach((p: any) => {
+          Object.values(st).forEach((arr:any[]) => arr.forEach((p:any) => {
             next[p.userId] = { ...(next[p.userId]||{}), userId: p.userId, name: p.name, status: p.status, fontFamily: p.fontFamily, color: p.color, online: true, lastSeen: Date.now() };
           }));
-          // mark previously known as offline if not in onlineIds
           Object.keys(next).forEach(id => { if (!onlineIds.has(id)) next[id].online = false; });
           setRoster(next); saveRoster(next);
         } catch {}
       })
-
-      .on("presence", { event: "join" }, () => { stableSetUsers(ch); 
-        try {
-          const st = ch.presenceState() as Record<string, any[]>;
-          const next = { ...roster } as any;
-          Object.values(st).forEach(arr => (arr as any[]).forEach((p: any) => { next[p.userId] = { ...(next[p.userId]||{}), userId: p.userId, name: p.name, status: p.status, fontFamily: p.fontFamily, color: p.color, online: true, lastSeen: Date.now() }; }));
-          setRoster(next); saveRoster(next);
-        } catch {}
+      .on("presence", { event: "join" }, () => {
+        stableSetUsers(ch);
       })
-
-      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); 
+      .on("presence", { event: "leave" }, () => {
+        stableSetUsers(ch);
         try {
           const st = ch.presenceState() as Record<string, any[]>;
           const onlineIds = new Set<string>();
-          Object.values(st).forEach(arr => (arr as any[]).forEach(p => { onlineIds.add(p.userId); }));
+          Object.values(st).forEach((arr:any[]) => arr.forEach((p:any) => { onlineIds.add(p.userId); }));
           const next = { ...roster } as any;
           Object.keys(next).forEach(id => { next[id].online = onlineIds.has(id); if (!next[id].online) next[id].lastSeen = Date.now(); });
           setRoster(next); saveRoster(next);
         } catch {}
+      })
+      .subscribe((st) => { /* ready */ });
 
-      .subscribe(async (st) => {
-        if (st === "SUBSCRIBED") {
-          setSubscribed(true);
-          if (!hasTrackedRef.current) {
-            await ch.track({
-              userId,
-              name: profile.name,
-              fontFamily: profile.fontFamily,
-              color: profile.color,
-              status: profile.status,
-              typing: false
-            hasTrackedRef.current = true;
-          }
-          stableSetUsers(ch);
-          // flush outbox
-          setOutbox((prev) => {
-            prev.forEach((o) => ch.send({ type: "broadcast", event: "message", payload: o.payload }));
-            return [];
-          if (typeof window !== "undefined") localStorage.removeItem(LS_OUTBOX);
-        }
-    return () => {
-      try { ch.unsubscribe(); } catch {}
-      setSubscribed(false);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, userId]);
+    // track me
+    ch.on("broadcast", { event: "typing" }, ({ payload }) => {
+      const { userId: from, typing } = payload as { userId: string, typing: boolean };
+      setUsers(prev => prev.map(u => u.userId === from ? { ...u, typing } : u));
+    });
 
-  // Update presence when profile fields change
-  useEffect(() => {
-    if (!channel || !subscribed) return;
-    channel.track({
+    // join with current presence
+    ch.track({
       userId,
       name: profile.name,
       fontFamily: profile.fontFamily,
       color: profile.color,
-      status: profile.status,
-      typing: isTyping
-    stableSetUsers(channel);
-  }, [profile.name, profile.fontFamily, profile.color, profile.status, isTyping, channel, userId, subscribed, stableSetUsers]);
+      status: profile.status || "",
+      typing: false,
+    });
 
-  // Visibility retrack
-  useEffect(() => {
-    if (!channel || !subscribed) return;
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        try {
-          channel.track({
-            userId,
-            name: profile.name,
-            fontFamily: profile.fontFamily,
-            color: profile.color,
-            status: profile.status,
-            typing: false
-          stableSetUsers(channel);
-        } catch {}
-      }
+    return () => {
+      ch.untrack();
+      ch.unsubscribe();
     };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [channel, subscribed, userId, profile.name, profile.fontFamily, profile.color, profile.status, stableSetUsers]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelName, userId, profile.name, profile.fontFamily, profile.color, profile.status, supabase]);
 
-  // optimistic send (always right aligned; shows name)
-  function deleteMessage(id: string){
-  setMessages(prev => prev.filter(m => m.id !== id));
-  if (channel && subscribed) {
-    channel.send({ type: "broadcast", event: "delete", payload: { id } });
-  }
-}
-
-function sendMessage() {
+  // input & send
+  const [input, setInput] = useState("");
+  function sendMessage() {
     const text = input.trim();
-    if (!text) return;
+    if (!text || !channel) return;
     const m: Message = {
       id: uid(),
       userId,
@@ -297,190 +194,114 @@ function sendMessage() {
       content: text,
       fontFamily: profile.fontFamily,
       color: profile.color,
-      meBubble: profile.bubble,
       ts: Date.now(),
-      isSelf: true
+      meBubble: profile.bubble,
+      isSelf: true,
     };
-    setMessages((prev) => [...prev, m]);
-    setMsgIds((prev) => new Set(prev).add(m.id));
+    setMessages(prev => [...prev, m]);
+    setMsgIds(prev => new Set(prev).add(m.id));
+    channel.send({ type: "broadcast", event: "message", payload: m });
     setInput("");
-    setIsTyping(false);
+  }
+  function deleteMessage(id: string) {
+    if (!channel) return;
+    setMessages(prev => prev.filter(m => m.id !== id));
+    channel.send({ type: "broadcast", event: "delete", payload: { id } });
+  }
 
-    if (channel && subscribed) {
-      channel.send({ type: "broadcast", event: "message", payload: { ...m, isSelf: undefined } });
-    } else {
-      setOutbox((prev) => [...prev, { id: m.id, payload: { ...m, isSelf: undefined } }]);
+  // typing
+  const typingRef = useRef<number>(0);
+  useEffect(() => {
+    if (!channel) return;
+    const now = Date.now();
+    if (now - typingRef.current > 400) {
+      typingRef.current = now;
+      channel.send({ type: "broadcast", event: "typing", payload: { userId, typing: true } });
+      setTimeout(() => channel.send({ type: "broadcast", event: "typing", payload: { userId, typing: false } }), 800);
     }
-  }
+  }, [input, channel, userId]);
 
-  function handleTyping(val: string) {
-    setInput(val);
-    if (!channel || !subscribed) return;
-    if (typingRef.current) clearTimeout(typingRef.current);
-    setIsTyping(true);
-    typingRef.current = setTimeout(() => setIsTyping(false), 1200);
-  }
+  // room UI helpers
+  const [roomName, setRoomName] = useState<string>(roomCode === "GLOBAL" ? "Global" : "Private Room");
+  const [roomBg, setRoomBg] = useState<string>("#f4f7fb");
 
-  // profile setters
-  const setName = (v: string) => setProfile((p) => ({ ...p, name: v }));
-  const setFontFamily = (v: string) => setProfile((p) => ({ ...p, fontFamily: v }));
-  const setColor = (v: string) => setProfile((p) => ({ ...p, color: v }));
-  const setStatus = (v: string) => setProfile((p) => ({ ...p, status: v }));
-  const setBubble = (v: string) => setProfile((p) => ({ ...p, bubble: v }));
-  const addCustomStatus = (v: string) => {
-    if (!v) return;
-    setProfile((p) => ({ ...p, customStatuses: Array.from(new Set([...(p.customStatuses || []), v])) }));
-    setStatus(v);
-  };
-
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  if (error) return <ErrorPanel title="Application needs configuration" details={error} />;
-  if (!supabase) return <div className="p-6 text-sm text-gray-600 dark:text-neutral-300">Initializing…</div>;
-
+  // render
   return (
-    <div className="relative mx-auto flex h-[100dvh] max-w-[var(--chat-max)] bg-white dark:bg-neutral-900 shadow-sm">
+    <div className="flex h-screen w-full bg-gray-50 dark:bg-neutral-950">
+      {/* Sidebar (desktop) */}
+      <div className="hidden md:block">
+        <SidebarUsers users={people} meId={userId} onStartDM={(u)=>setDmTarget(u)} />
+      </div>
+
+      {/* Mobile overlay */}
       {showSidebar && (
         <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={()=>setShowSidebar(false)}>
           <div className="absolute left-0 top-0 h-full w-72 bg-white dark:bg-neutral-900" onClick={(e)=>e.stopPropagation()}>
-            <SidebarUsers users={users} meId={userId} onStartDM={(u)=>setDmTarget(u)} />
+            <SidebarUsers users={people} meId={userId} onStartDM={(u)=>{ setDmTarget(u); setShowSidebar(false); }} />
           </div>
         </div>
       )}
-      <div className="hidden md:block"><SidebarUsers users={people as any} meId={userId} /></div>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        {/* Header / Controls */}
-        <div className="flex flex-wrap items-center gap-2 border-b dark:border-neutral-800 p-3">
-          <input
-            className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 text-sm"
-            value={profile.name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your display name"
-          />
-
-          <select
-            className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm"
-            value={profile.fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
-          >
-            {DEFAULT_FONTS.map((f) => (
-              <option key={f} value={f} style={{ fontFamily: f }}>
-                {f.split(",")[0]}
-              </option>
-            ))}
-          </select>
-
-          {/* Text color */}
-          <input
-            type="color"
-            className="h-9 w-12 cursor-pointer rounded-md border dark:border-neutral-700"
-            value={profile.color}
-            onChange={(e) => setColor(e.target.value)}
-            title="Text color"
-          />
-
-          {/* Bubble color */}
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-600 dark:text-neutral-400">Bubble</span>
-            <input
-              type="color"
-              className="h-9 w-12 cursor-pointer rounded-md border dark:border-neutral-700"
-              value={profile.bubble}
-              onChange={(e) => setBubble(e.target.value)}
-              title="My bubble color"
-            />
+      {/* Chat area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-white/80 backdrop-blur dark:bg-neutral-900/80 dark:border-neutral-800 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <button className="md:hidden rounded-lg border px-2 py-1 text-sm dark:border-neutral-700" onClick={()=>setShowSidebar(true)}>Users</button>
+            <h1 className="text-sm font-semibold">{roomName}</h1>
+            <span className="ml-2 rounded bg-neutral-100 px-2 py-0.5 text-[11px] dark:bg-neutral-800">Code: {roomCode}</span>
           </div>
-
-          {/* Header right actions */}
-<div className="ml-auto hidden sm:flex items-center gap-2">
-  <span className="text-xs opacity-70">Code: <b>{roomCode}</b></span>
-  <a href="/room/GLOBAL" className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-xs flex items-center">Go to Global</a>
-  <a href="/" className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-xs flex items-center">Go to Main Menu</a>
-</div>
-
-{/* Status dropdown with custom add */}
-
-          <div className="flex items-center gap-1">
-            <select
-              className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm max-w-[220px] mr-1"
-              value={profile.status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="">No status</option>
-              <option value="Available">Available</option>
-              <option value="Busy">Busy</option>
-              <option value="Be right back">Be right back</option>
-              {(profile.customStatuses || []).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <button onClick={()=> setStatus("")} className="h-9 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-xs mr-1" title="Clear current status">Clear</button>
-            {(profile.customStatuses || []).length > 0 && (
-              <div className="flex flex-wrap gap-1 max-w-[220px]">
-                {(profile.customStatuses || []).map((s) => (
-                  <button key={s} onClick={() => setProfile((p)=>({ ...p, customStatuses: (p.customStatuses || []).filter(x => x !== s) }))} className="text-[11px] px-2 py-1 rounded border dark:border-neutral-700">
-                    ✕ {s}
-                  </button>
-                ))}
-              </div>
-            )}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const input = form.elements.namedItem("customStatus") as HTMLInputElement;
-                const v = input.value.trim();
-                if (v) { addCustomStatus(v); form.reset(); }
-              }}
-              className="flex items-center gap-1"
-            >
-              <input name="customStatus" className="h-9 w-36 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm" placeholder="Add custom…" />
-              <button className="h-9 rounded-md border dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 text-sm">Add</button>
-            </form>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg border px-2 py-1 text-xs dark:border-neutral-700" onClick={()=>location.href="/"}>Go to Main Menu</button>
+            <button className="rounded-lg border px-2 py-1 text-xs dark:border-neutral-700" onClick={()=>location.href="/room/GLOBAL"}>Go to Global</button>
+            <button className="rounded-lg border px-2 py-1 text-xs dark:border-neutral-700" onClick={()=>setTheme(theme==="light"?"dark":"light")}>{theme==="light"?"Dark":"Light"}</button>
           </div>
-
-          {/* Dark mode switch */}
-          <label className="ml-auto inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={theme === "dark"}
-              onChange={(e) => setTheme(e.target.checked ? "dark" : "light")}
-            />
-            Dark mode
-          </label>
-        </div>
+        </header>
 
         {/* Messages */}
-        <div className="flex-1 space-y-2 overflow-y-auto bg-[url('data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'8\\' height=\\'8\\'%3E%3Crect width=\\'8\\' height=\\'8\\' fill=\\'%23ffffff\\'/%3E%3Cpath d=\\'M0 0h8v8H0z\\' fill=\\'none\\'/%3E%3C/svg%3E')] dark:bg-neutral-900 p-4">
-          {messages.map((m) => <MessageBubble key={m.id} m={m} />)}
-          <div ref={chatEndRef} />
+        <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ background: roomBg }}>
+          {messages.map(m => (
+            <MessageBubble key={m.id} m={m} onDelete={(id)=>deleteMessage(id)} />
+          ))}
         </div>
 
         {/* Composer */}
-        <div className="flex items-center gap-2 border-t dark:border-neutral-800 p-3">
-          <textarea
-            className="min-h-[44px] w-full resize-none rounded-lg border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm focus:outline-none"
-            placeholder="Message"
-            value={input}
-            onChange={(e) => handleTyping(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-            }}
-            style={{ fontFamily: profile.fontFamily, color: profile.color }}
-          />
-          <button
-            onClick={sendMessage}
-            className={clsx(
-              "h-10 shrink-0 rounded-lg px-4 text-sm font-medium text-white",
-              input.trim() ? "bg-blue-600 hover:bg-blue-700" : "bg-blue-300 cursor-not-allowed"
-            )}
-            disabled={!input.trim()}
-          >
-            Send
-          </button>
+        <div className="border-t bg-white dark:bg-neutral-900 dark:border-neutral-800 p-2">
+          <div className="flex items-center gap-2">
+            <input
+              value={input}
+              onChange={e=>setInput(e.target.value)}
+              placeholder={dmTarget ? `DM to ${dmTarget.name}` : "Type a message..."}
+              className="flex-1 rounded-lg border px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
+              style={{ fontFamily: profile.fontFamily, color: profile.color }}
+            />
+            <button onClick={sendMessage} className="rounded-lg bg-black text-white px-3 py-2 text-sm dark:bg-white dark:text-black">Send</button>
+          </div>
+          {/* Quick profile controls for demo */}
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-20">Name</span>
+              <input value={profile.name} onChange={e=>setProfile({...profile, name: e.target.value})} className="flex-1 rounded border px-2 py-1 dark:border-neutral-700 dark:bg-neutral-800" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-20">Text</span>
+              <input type="color" value={profile.color} onChange={e=>setProfile({...profile, color: e.target.value})} />
+              <span className="w-20">Bubble</span>
+              <input type="color" value={profile.bubble} onChange={e=>setProfile({...profile, bubble: e.target.value})} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-20">Font</span>
+              <select value={profile.fontFamily} onChange={e=>setProfile({...profile, fontFamily: e.target.value})} className="flex-1 rounded border px-2 py-1 dark:border-neutral-700 dark:bg-neutral-800">
+                {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-20">Status</span>
+              <input value={profile.status || ""} onChange={e=>setProfile({...profile, status: e.target.value})} className="flex-1 rounded border px-2 py-1 dark:border-neutral-700 dark:bg-neutral-800" />
+            </div>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
