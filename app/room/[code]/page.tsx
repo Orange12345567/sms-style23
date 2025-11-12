@@ -6,10 +6,6 @@ const Chat = dynamic(() => import("@/components/Chat"), { ssr: false });
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
-  const code = params?.code || "global";
-  return (
-    <div className="min-h-screen">
-      <Chat roomCode={String(code)} />
-    </div>
-  );
+  const code = params?.code ? String(params.code) : "global";
+  return <Chat roomCode={code} />;
 }

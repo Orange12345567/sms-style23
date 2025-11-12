@@ -7,6 +7,8 @@ import SidebarUsers, { UserPresence } from "./SidebarUsers";
 import MessageBubble, { Message } from "./MessageBubble";
 import ErrorPanel from "./ErrorPanel";
 import { clsx } from "clsx";
+import RoomControls from "./RoomControls";
+import RoomSettingsBar from "./RoomSettingsBar";
 
 
 const LS_PROFILE = "sms_groupchat_profile_v3";
@@ -49,7 +51,7 @@ type Profile = {
 
 type OutboxItem = { id: string; payload: Message };
 
-export default function Chat({ roomCode = "global" }: { roomCode?: string }) {
+export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
   const ROOM = `room:${roomCode}`;
 
   // theme toggle
@@ -136,7 +138,9 @@ export default function Chat({ roomCode = "global" }: { roomCode?: string }) {
     for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
     return s;
   }
-const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
+const [roomName, setRoomName] = useState<string>(roomCode === "GLOBAL" ? "Global Room" : `Room ${roomCode}`);
+const [roomBg, setRoomBg] = useState<string>("#ffffff");
+  const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
 
   // ---- Stable presence helpers ----
   const usersHashRef = useRef<string>("");
@@ -191,9 +195,9 @@ const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["
         setMsgIds((prev) => new Set(prev).add(m.id));
         setMessages((prev) => [...prev, { ...m, isSelf: m.userId === userId }]);
       })
-      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); })
-      .on("presence", { event: "join" }, () => { stableSetUsers(ch); })
-      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); })
+      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); const st = ch.presenceState() as any; const anyUser = Object.values(st).flat()[0]; if(anyUser){ if(!roomName && anyUser.roomName) setRoomName(anyUser.roomName); if(anyUser.roomBg) setRoomBg(anyUser.roomBg); } })
+      .on("presence", { event: "join" }, () => { stableSetUsers(ch); const st = ch.presenceState() as any; const anyUser = Object.values(st).flat()[0]; if(anyUser){ if(!roomName && anyUser.roomName) setRoomName(anyUser.roomName); if(anyUser.roomBg) setRoomBg(anyUser.roomBg); } })
+      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); const st = ch.presenceState() as any; const anyUser = Object.values(st).flat()[0]; if(anyUser){ if(!roomName && anyUser.roomName) setRoomName(anyUser.roomName); if(anyUser.roomBg) setRoomBg(anyUser.roomBg); } })
       .subscribe(async (st) => {
         if (st === "SUBSCRIBED") {
           setSubscribed(true);
@@ -228,14 +232,7 @@ const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["
   // Update presence when profile fields change
   useEffect(() => {
     if (!channel || !subscribed) return;
-    channel.track({
-      userId,
-      name: profile.name,
-      fontFamily: profile.fontFamily,
-      color: profile.color,
-      status: profile.status,
-      typing: isTyping
-    });
+    channel.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: isTyping, roomName, roomBg });
     stableSetUsers(channel);
   }, [profile.name, profile.fontFamily, profile.color, profile.status, isTyping, channel, userId, subscribed, stableSetUsers]);
 
@@ -314,7 +311,7 @@ const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["
   if (!supabase) return <div className="p-6 text-sm text-gray-600 dark:text-neutral-300">Initializing…</div>;
 
   return (
-    <div className="relative mx-auto flex h-[100dvh] max-w-[var(--chat-max)] bg-white dark:bg-neutral-900 shadow-sm">
+    <div className="relative mx-auto flex h-[100dvh] max-w-[var(--chat-max)] shadow-sm" style={{ background: roomBg }}>
       <SidebarUsers users={users} meId={userId} />
 
       <main className="flex min-w-0 flex-1 flex-col">
