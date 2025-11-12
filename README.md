@@ -24,6 +24,3 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY= your anon key
 
 ## v1.1.0
 - Removed stray timer code causing TypeScript error (`t` not defined).
-
-## v1.1.1
-- Sidebar presence made stable (no flicker) via hashed diffing + self-fallback + visibility re-track.

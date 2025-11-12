@@ -19,7 +19,20 @@
 }
 .bubble.them:after {
   left: -6px;
-  border-right: 6px solid var(--bubble-them, #e5e7eb);
+  border-right: 6px solid #e5e7eb;
   border-top: 6px solid transparent;
   border-bottom: 6px solid transparent;
+}
+
+
+:root {
+  --background: 255 255 255;
+  --foreground: 17 24 39;
+}
+.dark {
+  --background: 17 24 39; /* gray-900 */
+  --foreground: 243 244 246; /* gray-100 */
+}
+body {
+  @apply bg-[rgb(var(--background))] text-[rgb(var(--foreground))];
 }
