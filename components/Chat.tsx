@@ -102,8 +102,6 @@ useEffect(() => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<UserPresence[]>([])
-  
-  
   const [roster, setRoster] = useState<Record<string, any>>(() => {
     if (typeof window === "undefined") return {};
     try {
@@ -116,19 +114,20 @@ useEffect(() => {
       (Number(b.online) - Number(a.online)) ||
       ((a.name || "").localeCompare(b.name || ""))
   );
-const [roster, setRoster] = useState<Record<string, any>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`);
+  
+  
+  
       return raw ? JSON.parse(raw) : {};
     } catch { return {}; }
   });
-const [roster, setRoster] = useState<Record<string, any>>(() => { if (typeof window === "undefined") return {}; try { const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`); return raw ? JSON.parse(raw) : {}; } catch { return {}; } })
+  
 
-  const [roster, setRoster] = useState<Record<string, any>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+ return raw ? JSON.parse(raw) : {}; } catch { return {}; } })
+
+  
       return raw ? JSON.parse(raw) : {};
     } catch { return {}; }
   });
