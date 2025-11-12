@@ -99,9 +99,9 @@ export default function Chat() {
     const [subscribed, setSubscribed] = useState(false);
   const hasTrackedRef = useRef(false);
   
-  const updateUsers = useCallback(() => {
-    if (!channel) return;
-    const state = channel.presenceState() as Record<string, any[]>;
+  const updateUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
+    if (!chInst) return;
+    const state = chInst.presenceState() as Record<string, any[]>;
     const flat: UserPresence[] = Object.values(state)
       .flat()
       .map((p: any) => ({
@@ -114,7 +114,7 @@ export default function Chat() {
       }));
     flat.sort((a, b) => a.name.localeCompare(b.name));
     setUsers(flat);
-  }, [channel]);
+  }, []);
 
 
   const supabase = useMemo(() => {
@@ -140,7 +140,7 @@ export default function Chat() {
         setMessages((prev) => [...prev, { ...m, isSelf: m.userId === userId }]);
               })
       .on("presence", { event: "sync" }, () => {
-        updateUsers();
+        updateUsers(ch);
         if (!hasTrackedRef.current) {
           try {
             ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
@@ -149,7 +149,7 @@ export default function Chat() {
         }
               })
       .on("presence", { event: "join" }, () => {
-        updateUsers();
+        updateUsers(ch);
         if (!hasTrackedRef.current) {
           try {
             ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
@@ -158,7 +158,7 @@ export default function Chat() {
         }
               })
       .on("presence", { event: "leave" }, () => {
-        updateUsers();
+        updateUsers(ch);
         if (!hasTrackedRef.current) {
           try {
             ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
@@ -177,7 +177,7 @@ export default function Chat() {
             status: profile.status,
             typing: false
           });
-          updateUsers();
+          updateUsers(ch);
         if (!hasTrackedRef.current) {
           try {
             ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });

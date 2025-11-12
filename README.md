@@ -18,3 +18,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY= your anon key
 ## v1.0.8
 - Presence sidebar fix (track on subscribe or first sync).
 - Removed on-screen debug panel.
+
+## v1.0.9
+- Fix TypeScript error about `channel` used before declaration by refactoring presence updater.
