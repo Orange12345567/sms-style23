@@ -26,6 +26,7 @@ export default function Chat({ initialRoomCode }: { initialRoomCode: string | nu
 
   const listRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceChannelRef = useRef<any>(null);
 
   // Sign in anonymously
   useEffect(() => {
@@ -122,24 +123,28 @@ export default function Chat({ initialRoomCode }: { initialRoomCode: string | nu
   useEffect(() => {
     if (!room || !profile || !userId) return;
     const channel = supabase.channel(`presence:${room.id}`, { config: { presence: { key: userId } } });
+    presenceChannelRef.current = channel;
 
     channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState() as Record<string, PresencePayload[]>;
+      const state = channel.presenceState() as Record<string, any[]>;
       const merged: Record<string, PresencePayload> = {};
       Object.values(state).forEach((arr) => {
-        arr.forEach((p) => { merged[p.user_id] = p; });
+        arr.forEach((p: any) => { merged[p.user_id] = (p as unknown as PresencePayload); });
       });
       setMembers(merged);
     });
 
     channel.on("presence", { event: "join" }, ({ newPresences }) => {
-      setMembers((curr) => ({ ...curr, ...(Object.fromEntries(newPresences.map(p => [p.user_id, p as PresencePayload]))) }));
+      setMembers((curr) => ({
+        ...curr,
+        ...(Object.fromEntries(newPresences.map((p: any) => [p.user_id, (p as unknown as PresencePayload)])))
+      }));
     });
 
     channel.on("presence", { event: "leave" }, ({ leftPresences }) => {
       setMembers((curr) => {
-        const copy = { ...curr };
-        leftPresences.forEach((p:any) => { delete copy[p.user_id]; });
+        const copy: Record<string, PresencePayload> = { ...curr } as any;
+        (leftPresences as any[]).forEach((p: any) => { delete copy[p.user_id]; });
         return copy;
       });
     });
@@ -167,12 +172,10 @@ export default function Chat({ initialRoomCode }: { initialRoomCode: string | nu
   }, [profile]);
 
   function updatePresence(partial: Partial<PresencePayload>) {
-    // best-effort; ignore errors
-    const channel = supabase.getChannels().find(c => c.topic.startsWith("realtime:presence:presence:"));
+    const channel: any = presenceChannelRef.current;
     if (!channel) return;
     const me = (members[userId ?? ""] || {}) as PresencePayload;
-    // @ts-ignore
-    channel.track({ ...me, ...partial });
+    channel.track({ ...(me as any), ...(partial as any) });
   }
 
   async function upsertProfilePartial(patch: Partial<Profile>) {
