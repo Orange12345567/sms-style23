@@ -15,14 +15,14 @@ export type Message = {
 export default function MessageBubble({ m }: { m: Message }) {
   const me = m.isSelf;
   const style: React.CSSProperties = me
-    ? { ['--bubble-me' as any]: m.meBubble || "#0b93f6", fontFamily: m.fontFamily }
+    ? { ['--bubble-me' as any]: m.meBubble || "#0b93f6", fontFamily: m.fontFamily, color: m.color }
     : { ['--bubble-them' as any]: m.meBubble || "#e5e7eb", background: 'var(--bubble-them)', fontFamily: m.fontFamily, color: m.color };
   return (
     <div className={clsx("flex w-full", me ? "justify-end" : "justify-start")}>
       <div
         className={clsx(
           "relative max-w-[80%] rounded-2xl px-3 py-2 text-sm bubble",
-          me ? "text-white bubble me" : "text-gray-900 bubble them"
+          me ? "bubble me" : "text-gray-900 bubble them"
         )}
         style={me ? { ...style, background: `var(--bubble-me)` } : style}
       >
