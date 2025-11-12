@@ -7,11 +7,20 @@ import MessageBubble, { Message } from "./MessageBubble";
 import ErrorPanel from "./ErrorPanel";
 import { clsx } from "clsx";
 
-const ROOM = "room:global";
+
 const LS_PROFILE = "sms_groupchat_profile_v3";
 const LS_UID = "sms_groupchat_uid_v3";
 const LS_OUTBOX = "sms_groupchat_outbox_v2";
 const LS_THEME = "sms_groupchat_theme";
+
+const LS_ROOM = "sms_groupchat_room_v1";
+function genRoomCode() {
+  const s = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i=0;i<6;i++) out += s[Math.floor(Math.random()*s.length)];
+  return out;
+}
+
 
 const DEFAULT_FONTS = [
   "Inter, system-ui, sans-serif",
@@ -22,6 +31,22 @@ const DEFAULT_FONTS = [
   "Trebuchet MS, sans-serif",
   "Times New Roman, serif",
   "Verdana, sans-serif",
+  "Tahoma, sans-serif",
+  "Gill Sans, sans-serif",
+  "Lucida Sans, sans-serif",
+  "Palatino Linotype, serif",
+  "Garamond, serif",
+  "Bookman, serif",
+  "Avant Garde, sans-serif",
+  "Futura, sans-serif",
+  "Franklin Gothic Medium, sans-serif",
+  "Didot, serif",
+  "Baskerville, serif",
+  "Rockwell, serif",
+  "Copperplate, serif",
+  "Monaco, monospace",
+  "Consolas, monospace",
+  "Menlo, monospace"
 ];
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -95,6 +120,16 @@ export default function Chat() {
     if (typeof window !== "undefined") localStorage.setItem(LS_OUTBOX, JSON.stringify(outbox));
   }, [outbox]);
 
+  // Room code (private rooms). Defaults to GLOBAL if none.
+  const [roomCode, setRoomCode] = useState<string>(() => {
+    if (typeof window === "undefined") return "GLOBAL";
+    return localStorage.getItem(LS_ROOM) || "GLOBAL";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem(LS_ROOM, roomCode);
+  }, [roomCode]);
+
+
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
@@ -137,7 +172,7 @@ export default function Chat() {
         userId,
         name: profile.name,
         fontFamily: profile.fontFamily,
-        color: profile.color,
+        textColor: profile.color,
         status: profile.status,
         typing: false,
       });
@@ -159,7 +194,7 @@ export default function Chat() {
   // Channel setup
   useEffect(() => {
     if (!supabase) return;
-    const ch = supabase.channel(ROOM, { config: { broadcast: { self: false }, presence: { key: userId } } });
+    const ch = supabase.channel(`room:${roomCode}`, { config: { broadcast: { self: false }, presence: { key: userId } } });
     setChannel(ch);
 
     ch
@@ -180,7 +215,7 @@ export default function Chat() {
               userId,
               name: profile.name,
               fontFamily: profile.fontFamily,
-              color: profile.color,
+              textColor: profile.color,
               status: profile.status,
               typing: false
             });
@@ -201,7 +236,7 @@ export default function Chat() {
       setSubscribed(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, userId]);
+  }, [supabase, userId, roomCode]);
 
   // Update presence when profile fields change
   useEffect(() => {
@@ -210,7 +245,7 @@ export default function Chat() {
       userId,
       name: profile.name,
       fontFamily: profile.fontFamily,
-      color: profile.color,
+      textColor: profile.color,
       status: profile.status,
       typing: isTyping
     });
@@ -227,7 +262,7 @@ export default function Chat() {
             userId,
             name: profile.name,
             fontFamily: profile.fontFamily,
-            color: profile.color,
+            textColor: profile.color,
             status: profile.status,
             typing: false
           });
@@ -249,8 +284,8 @@ export default function Chat() {
       name: profile.name,
       content: text,
       fontFamily: profile.fontFamily,
-      color: profile.color,
-      meBubble: profile.bubble,
+      textColor: profile.color,
+      bubbleColor: profile.bubble,
       ts: Date.now(),
       isSelf: true
     };
@@ -366,6 +401,42 @@ export default function Chat() {
               <input name="customStatus" className="h-9 w-36 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm" placeholder="Add custom…" />
               <button className="h-9 rounded-md border dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 text-sm">Add</button>
             </form>
+          </div>
+
+
+          {/* Room controls */}
+          <div className="flex items-center gap-2">
+            <button
+              className="h-9 rounded-md border dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 text-sm"
+              onClick={() => setRoomCode(genRoomCode())}
+              title="Create private room (generates a code)"
+            >
+              New room
+            </button>
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = e.target as HTMLFormElement;
+                const i = f.elements.namedItem("joinCode") as HTMLInputElement;
+                const code = (i.value || "").trim().toUpperCase();
+                if (code) setRoomCode(code);
+                f.reset();
+              }}
+            >
+              <input
+                name="joinCode"
+                className="h-9 w-28 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm uppercase"
+                placeholder="Join code"
+                maxLength={12}
+              />
+              <button className="h-9 rounded-md border dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 text-sm">
+                Join
+              </button>
+            </form>
+            <div className="text-xs px-2 py-1 rounded border dark:border-neutral-700">
+              Room: <b>{roomCode}</b>
+            </div>
           </div>
 
           {/* Dark mode switch */}

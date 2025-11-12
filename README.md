@@ -27,3 +27,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY= your anon key
 
 ## v1.1.1
 - Sidebar presence made stable (no flicker) via hashed diffing + self-fallback + visibility re-track.
+
+
+## v1.2.0
+- **Private rooms with codes**: Click **New room** to generate a 6‑char code. Share it. Others can **Join** with the code. Realtime channel is `room:CODE`.
+- **Synced colors**: Each sender's **bubble color** and **text color** are embedded in messages, so everyone sees them the same.
+- **Font library expanded**: Many more font family options in the dropdown.

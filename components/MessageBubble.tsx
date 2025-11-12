@@ -6,17 +6,19 @@ export type Message = {
   name: string;
   content: string;
   fontFamily: string;
-  color: string; // text color for others; ignored for me
+  textColor: string; // sender's preferred text color
+  bubbleColor: string; // sender's preferred bubble color
   ts: number;
   isSelf?: boolean;
-  meBubble?: string; // my bubble color
 };
 
 export default function MessageBubble({ m }: { m: Message }) {
   const me = m.isSelf;
-  const style: React.CSSProperties = me
-    ? { ['--bubble-me' as any]: m.meBubble || "#0b93f6", fontFamily: m.fontFamily }
-    : { fontFamily: m.fontFamily, color: m.color };
+  const style: React.CSSProperties = {
+    fontFamily: m.fontFamily,
+    color: me ? undefined : m.textColor,
+    background: me ? m.bubbleColor : undefined
+  };
   return (
     <div className={clsx("flex w-full", me ? "justify-end" : "justify-start")}>
       <div
@@ -24,7 +26,7 @@ export default function MessageBubble({ m }: { m: Message }) {
           "relative max-w-[80%] rounded-2xl px-3 py-2 text-sm bubble",
           me ? "text-white bubble me" : "bg-smsLight text-gray-900 bubble them"
         )}
-        style={me ? { ...style, background: `var(--bubble-me)` } : style}
+        style={style}
       >
         <div className="mb-1 text-[11px] opacity-80 font-semibold">{m.name}</div>
         <div className="whitespace-pre-wrap break-words">
