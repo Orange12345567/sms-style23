@@ -20,8 +20,8 @@ type Message = {
 type UserPresence = {
   userId: string;
   name: string;
-  fontFamily?: string;
-  color?: string;
+  fontFamily: string;
+  color: string;
   status?: string;
   typing?: boolean;
 };
@@ -94,12 +94,12 @@ export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
   const people: UserPresence[] = useMemo(() => {
     const arr = users.map(u => ({ ...u }));
     if (!arr.some(u => u.userId === userId)) {
-      arr.push({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
+      arr.push({ userId, name: profile.name, fontFamily: profile.fontFamily || "Inter, sans-serif", color: profile.color || "#93c5fd", status: profile.status || "", typing: false });
     }
     for (const id of Object.keys(roster)) {
       if (!arr.some(u => u.userId === id)) {
         const r = roster[id];
-        arr.push({ userId: id, name: r.name || "User", fontFamily: r.fontFamily || "Inter, sans-serif", color: r.color || "#93c5fd", status: r.status || "", typing: false });
+        arr.push({ userId: id, name: (r.name || "User"), fontFamily: (r.fontFamily || "Inter, sans-serif"), color: (r.color || "#93c5fd"), status: (r.status || ""), typing: false });
       }
     }
     arr.sort((a,b) => a.name.localeCompare(b.name));
