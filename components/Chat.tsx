@@ -12,6 +12,7 @@ const LS_PROFILE = "sms_groupchat_profile_v3";
 const LS_UID = "sms_groupchat_uid_v3";
 const LS_OUTBOX = "sms_groupchat_outbox_v2";
 const LS_THEME = "sms_groupchat_theme";
+const LS_ROSTER = "sms_groupchat_roster_v1";
 
 const DEFAULT_FONTS = [
   "Inter, system-ui, sans-serif",
@@ -100,7 +101,16 @@ useEffect(() => {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
-  const [users, setUsers] = useState<UserPresence[]>([]);
+  const [users, setUsers] = useState<UserPresence[]>([])
+  const [roster, setRoster] = useState<Record<string, any>>(() => { if (typeof window === "undefined") return {}; try { const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`); return raw ? JSON.parse(raw) : {}; } catch { return {}; } })
+  const people: any[] = Object.values(roster).sort((a: any, b: any) => (Number(b.online) - Number(a.online)) || (a.name || "").localeCompare(b.name || ""));
+  const [roster, setRoster] = useState<Record<string, any>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = localStorage.getItem(`${LS_ROSTER}_${roomCode}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
   const [error, setError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -176,9 +186,39 @@ useEffect(() => {
         const { id } = payload as { id: string };
         setMessages(prev => prev.filter(m => m.id !== id));
       })
-      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); })
-      .on("presence", { event: "join" }, () => { stableSetUsers(ch); })
-      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); })
+      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); 
+        // Update roster from presence
+        try {
+          const st = ch.presenceState() as Record<string, any[]>;
+          const onlineIds = new Set<string>();
+          Object.values(st).forEach(arr => (arr as any[]).forEach(p => { onlineIds.add(p.userId); }));
+          const next = { ...roster } as any;
+          Object.values(st).forEach(arr => (arr as any[]).forEach((p: any) => {
+            next[p.userId] = { ...(next[p.userId]||{}), userId: p.userId, name: p.name, status: p.status, fontFamily: p.fontFamily, color: p.color, online: true, lastSeen: Date.now() };
+          }));
+          // mark previously known as offline if not in onlineIds
+          Object.keys(next).forEach(id => { if (!onlineIds.has(id)) next[id].online = false; });
+          setRoster(next); saveRoster(next);
+        } catch {}
+      })
+      .on("presence", { event: "join" }, () => { stableSetUsers(ch); 
+        try {
+          const st = ch.presenceState() as Record<string, any[]>;
+          const next = { ...roster } as any;
+          Object.values(st).forEach(arr => (arr as any[]).forEach((p: any) => { next[p.userId] = { ...(next[p.userId]||{}), userId: p.userId, name: p.name, status: p.status, fontFamily: p.fontFamily, color: p.color, online: true, lastSeen: Date.now() }; }));
+          setRoster(next); saveRoster(next);
+        } catch {}
+      })
+      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); 
+        try {
+          const st = ch.presenceState() as Record<string, any[]>;
+          const onlineIds = new Set<string>();
+          Object.values(st).forEach(arr => (arr as any[]).forEach(p => { onlineIds.add(p.userId); }));
+          const next = { ...roster } as any;
+          Object.keys(next).forEach(id => { next[id].online = onlineIds.has(id); if (!next[id].online) next[id].lastSeen = Date.now(); });
+          setRoster(next); saveRoster(next);
+        } catch {}
+      })
       .subscribe(async (st) => {
         if (st === "SUBSCRIBED") {
           setSubscribed(true);
@@ -314,7 +354,7 @@ function sendMessage() {
           </div>
         </div>
       )}
-      <div className="hidden md:block"><SidebarUsers users={users} meId={userId} /></div>
+      <div className="hidden md:block"><SidebarUsers users={people as any} meId={userId} /></div>
 
       <main className="flex min-w-0 flex-1 flex-col">
         {/* Header / Controls */}

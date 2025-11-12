@@ -25,6 +25,7 @@ export const FONT_OPTIONS: string[] = [
   "Fira Code, monospace",
   "Playfair Display, serif",
   "Cinzel, serif",
+  "Cinzel Decorative, serif",
   "Cormorant Garamond, serif",
   "Lobster, cursive",
   "Pacifico, cursive",
@@ -53,12 +54,17 @@ export const FONT_OPTIONS: string[] = [
   "Rye, cursive",
   "Tilt Prism, cursive",
   "Orbitron, sans-serif",
-  "Cinzel Decorative, serif",
   "Special Elite, cursive",
   "Indie Flower, cursive",
   "Courgette, cursive",
   "Poiret One, cursive",
   "Amatic SC, cursive",
-  "Great Vibes, cursive",
-  "Tangerine, cursive"
+  "Tangerine, cursive",
+  "Arial, sans-serif",
+  "Georgia, serif",
+  "Courier New, monospace",
+  "Comic Sans MS, cursive",
+  "Trebuchet MS, sans-serif",
+  "Times New Roman, serif",
+  "Verdana, sans-serif"
 ];
