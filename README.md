@@ -1,33 +1,23 @@
-# SMS-Style Group Chat (Temporary / Live Only)
+# SMS-Style Group Chat (Temporary / Live Only) — FIXED
 
-A **temporary / live-only** SMS-style group chat. Everyone auto-joins a single global room via **Supabase Realtime** (no DB) with **typing indicators**, **presence list (names stacked)**, **custom name with emojis**, **per-user message font & color**, and **unlimited custom statuses** via dropdown.
+This build avoids server-side initialization of Supabase and uses a **client-only, lazy** Supabase client to prevent `supabaseUrl is required` during SSR.
 
-## Quick Start
+## What changed
+- `app/page.tsx` uses `dynamic(..., { ssr: false })` so Chat renders **only on the client**.
+- `lib/supabaseClient.ts` exposes `getSupabase()` which lazily reads `NEXT_PUBLIC_...` envs **at runtime on the client** (no module-level createClient).
+- Clear error message if envs are missing.
 
+## Env Vars (Vercel → Project Settings → Environment Variables)
+```
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
+
+## Run
 ```bash
-pnpm i   # or npm i / yarn
-pnpm dev # or npm run dev
+npm i
+npm run dev
 ```
 
-Open http://localhost:3000
-
-## Environment Variables
-
-Create `.env.local` (or set on Vercel):
-
-```
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-```
-
-No tables required; uses **Realtime Channels** (broadcast + presence) only.
-
-## Deploy to Vercel
-1. Push to GitHub.
-2. Import to Vercel.
-3. Add the two env vars above.
-4. Deploy.
-
-## Notes
-- Messages are not persisted; refreshing clears chat.
-- To support multiple rooms, change `ROOM` in `components/Chat.tsx` to read from a path param.
+## Deploy
+Push to GitHub → Import on Vercel → set env vars → Deploy.

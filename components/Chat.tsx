@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabase } from "@/lib/supabaseClient";
 import SidebarUsers, { UserPresence } from "./SidebarUsers";
 import MessageBubble, { Message } from "./MessageBubble";
 import { clsx } from "clsx";
@@ -38,6 +38,9 @@ export default function Chat() {
   const typingRef = useRef<NodeJS.Timeout | null>(null);
   const [isTyping, setIsTyping] = useState(false);
 
+  // Create Supabase client only on client at runtime
+  const supabase = useMemo(() => getSupabase(), []);
+
   const channel = useMemo(() => {
     return supabase.channel(ROOM, {
       config: {
@@ -45,7 +48,7 @@ export default function Chat() {
         presence: { key: userId },
       },
     });
-  }, [userId]);
+  }, [supabase, userId]);
 
   // Auto-scroll on new messages
   useEffect(() => {
