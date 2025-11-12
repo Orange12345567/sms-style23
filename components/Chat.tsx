@@ -1,3 +1,4 @@
+
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabaseClient";
@@ -60,14 +61,22 @@ export default function Chat() {
     return id;
   });
 
+  const defaultProfile: Profile = {
+    name: `Guest-${Math.floor(Math.random()*999)}`,
+    fontFamily: DEFAULT_FONTS[0],
+    color: "#111827",
+    status: "",
+    customStatuses: [],
+    bubble: "#0b93f6",
+  };
+
   const [profile, setProfile] = useState<Profile>(() => {
-    const defaultProfile: Profile = { name: `Guest-${Math.floor(Math.random()*999)}`, fontFamily: DEFAULT_FONTS[0], color: "#111827", status: "", customStatuses: [], bubble: "#0b93f6" };
     if (typeof window === "undefined") return defaultProfile;
     const raw = localStorage.getItem(LS_PROFILE);
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Partial<Profile>;
-        return { ...defaultProfile, ...parsed, bubble: parsed.bubble ?? defaultProfile.bubble } as Profile;
+        return { ...defaultProfile, ...parsed, bubble: parsed.bubble ?? defaultProfile.bubble };
       } catch {}
     }
     return defaultProfile;
@@ -90,10 +99,26 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
   const [users, setUsers] = useState<UserPresence[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // ---- Stable presence manager (prevents flicker) ----
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const typingRef = useRef<NodeJS.Timeout | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+
+  const [subscribed, setSubscribed] = useState(false);
+  const hasTrackedRef = useRef(false);
+
+  const supabase = useMemo(() => {
+    const c = getSupabase();
+    if (!c) setError("Missing Supabase environment variables.");
+    return c;
+  }, []);
+
+  const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
+
+  // ---- Stable presence helpers ----
   const usersHashRef = useRef<string>("");
-  function calcUsers(chInst: any): UserPresence[] {
+  const calcUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
     const state = chInst.presenceState() as Record<string, any[]>;
     const flat: UserPresence[] = Object.values(state)
       .flat()
@@ -119,8 +144,9 @@ export default function Chat() {
     }
     flat.sort((a, b) => a.name.localeCompare(b.name));
     return flat;
-  }
-  function stableSetUsers(chInst: any) {
+  }, [profile.name, profile.fontFamily, profile.color, profile.status, userId]);
+
+  const stableSetUsers = useCallback((chInst: ReturnType<NonNullable<typeof supabase>["channel"]>) => {
     if (!chInst) return;
     const next = calcUsers(chInst);
     const hash = JSON.stringify(next.map(u => [u.userId, u.name, u.status]));
@@ -128,62 +154,76 @@ export default function Chat() {
       usersHashRef.current = hash;
       setUsers(next);
     }
-  }
-  const [error, setError] = useState<string | null>(null);
+  }, [calcUsers]);
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const typingRef = useRef<NodeJS.Timeout | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
-
-    const [subscribed, setSubscribed] = useState(false);
-  const hasTrackedRef = useRef(false);
-  
-      flat.sort((a, b) => a.name.localeCompare(b.name));
-    setUsers(flat);
-  }, []);
-
-
-  const supabase = useMemo(() => {
-    const c = getSupabase();
-    if (!c) setError("Missing Supabase environment variables.");
-    return c;
-  }, []);
-
-  const [channel, setChannel] = useState<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
-  const [retry, setRetry] = useState(0);
-
-  const setupChannel = useCallback(() => {
+  // Channel setup
+  useEffect(() => {
     if (!supabase) return;
-    // Disable self echo to avoid duplicates (we do optimistic UI)
     const ch = supabase.channel(ROOM, { config: { broadcast: { self: false }, presence: { key: userId } } });
     setChannel(ch);
 
     ch
       .on("broadcast", { event: "message" }, ({ payload }) => {
         const m = payload as Message;
-        if (msgIds.has(m.id)) return; // dedupe by id
+        if (msgIds.has(m.id)) return;
         setMsgIds((prev) => new Set(prev).add(m.id));
         setMessages((prev) => [...prev, { ...m, isSelf: m.userId === userId }]);
-              })
-      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); });
-            hasTrackedRef.current = true;
-          } catch {}
-        }
-              })
-      .on("presence", { event: "join" }, () => { stableSetUsers(ch); });
-            hasTrackedRef.current = true;
-          } catch {}
-        }
-              })
-      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); });
-            hasTrackedRef.current = true;
-          } catch {}
-        }
-              })
+      })
+      .on("presence", { event: "sync" }, () => { stableSetUsers(ch); })
+      .on("presence", { event: "join" }, () => { stableSetUsers(ch); })
+      .on("presence", { event: "leave" }, () => { stableSetUsers(ch); })
       .subscribe(async (st) => {
         if (st === "SUBSCRIBED") {
           setSubscribed(true);
-                    await ch.track({
+          if (!hasTrackedRef.current) {
+            await ch.track({
+              userId,
+              name: profile.name,
+              fontFamily: profile.fontFamily,
+              color: profile.color,
+              status: profile.status,
+              typing: false
+            });
+            hasTrackedRef.current = true;
+          }
+          stableSetUsers(ch);
+          // flush outbox
+          setOutbox((prev) => {
+            prev.forEach((o) => ch.send({ type: "broadcast", event: "message", payload: o.payload }));
+            return [];
+          });
+          if (typeof window !== "undefined") localStorage.removeItem(LS_OUTBOX);
+        }
+      });
+
+    return () => {
+      try { ch.unsubscribe(); } catch {}
+      setSubscribed(false);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, userId]);
+
+  // Update presence when profile fields change
+  useEffect(() => {
+    if (!channel || !subscribed) return;
+    channel.track({
+      userId,
+      name: profile.name,
+      fontFamily: profile.fontFamily,
+      color: profile.color,
+      status: profile.status,
+      typing: isTyping
+    });
+    stableSetUsers(channel);
+  }, [profile.name, profile.fontFamily, profile.color, profile.status, isTyping, channel, userId, subscribed, stableSetUsers]);
+
+  // Visibility retrack
+  useEffect(() => {
+    if (!channel || !subscribed) return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        try {
+          channel.track({
             userId,
             name: profile.name,
             fontFamily: profile.fontFamily,
@@ -191,34 +231,13 @@ export default function Chat() {
             status: profile.status,
             typing: false
           });
-          stableSetUsers(ch);
-        if (!hasTrackedRef.current) {
-          try {
-            ch.track({ userId, name: profile.name, fontFamily: profile.fontFamily, color: profile.color, status: profile.status, typing: false });
-            hasTrackedRef.current = true;
-          } catch {}
-        }
-          // flush outbox
-          setOutbox((prev) => {
-            prev.forEach((o) => ch.send({ type: "broadcast", event: "message", payload: o.payload }));
-            return [];
-          });
-          localStorage.removeItem(LS_OUTBOX);
-        } else {
-          setSubscribed(false);
-        }
-      });
-
-        return () => {
-try { ch.unsubscribe(); } catch {}
-      setSubscribed(false);
+          stableSetUsers(channel);
+        } catch {}
+      }
     };
-  }, [supabase, userId, profile.name, profile.fontFamily, profile.color, profile.status, subscribed, msgIds, updateUsers]);
-
-  useEffect(() => {
-    if (!supabase) return;
-    setupChannel();
-  }, [supabase, retry, setupChannel]);
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [channel, subscribed, userId, profile.name, profile.fontFamily, profile.color, profile.status, stableSetUsers]);
 
   // optimistic send (always right aligned; shows name)
   function sendMessage() {
@@ -235,7 +254,6 @@ try { ch.unsubscribe(); } catch {}
       ts: Date.now(),
       isSelf: true
     };
-    // show instantly
     setMessages((prev) => [...prev, m]);
     setMsgIds((prev) => new Set(prev).add(m.id));
     setInput("");
@@ -269,27 +287,6 @@ try { ch.unsubscribe(); } catch {}
   };
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  useEffect(() => {
-    if (!channel || !subscribed) return;
-    const onVis = () => {
-      if (document.visibilityState === "visible") {
-        try {
-          channel.track({
-            userId,
-            name: profile.name,
-            fontFamily: profile.fontFamily,
-            color: profile.color,
-            status: profile.status,
-            typing: false
-          });
-          stableSetUsers(channel);
-        } catch {}
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [channel, subscribed, userId, profile.name, profile.fontFamily, profile.color, profile.status]);
-
 
   if (error) return <ErrorPanel title="Application needs configuration" details={error} />;
   if (!supabase) return <div className="p-6 text-sm text-gray-600 dark:text-neutral-300">Initializing…</div>;
@@ -320,7 +317,7 @@ try { ch.unsubscribe(); } catch {}
             ))}
           </select>
 
-          {/* Text color (for others' bubble text color & your composer text) */}
+          {/* Text color */}
           <input
             type="color"
             className="h-9 w-12 cursor-pointer rounded-md border dark:border-neutral-700"
@@ -329,7 +326,7 @@ try { ch.unsubscribe(); } catch {}
             title="Text color"
           />
 
-          {/* Bubble color (your own bubble background) */}
+          {/* Bubble color */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-gray-600 dark:text-neutral-400">Bubble</span>
             <input
@@ -366,11 +363,7 @@ try { ch.unsubscribe(); } catch {}
               }}
               className="flex items-center gap-1"
             >
-              <input
-                name="customStatus"
-                className="h-9 w-36 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm"
-                placeholder="Add custom…"
-              />
+              <input name="customStatus" className="h-9 w-36 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-sm" placeholder="Add custom…" />
               <button className="h-9 rounded-md border dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-3 text-sm">Add</button>
             </form>
           </div>
