@@ -23,7 +23,9 @@ const DEFAULT_FONTS = [
   "Verdana, sans-serif",
 ];
 
-function uid() { return Math.random().toString(36).slice(2); }
+function uid() {
+  const effectiveRoomCode = roomCode ?? "global";
+ return Math.random().toString(36).slice(2); }
 
 type Profile = {
   name: string;
@@ -36,7 +38,8 @@ type Profile = {
 
 type OutboxItem = { id: string; payload: Message };
 
-export default function Chat() {
+type ChatProps = { roomCode?: string };
+export default function Chat({ roomCode }: ChatProps) {
   // theme toggle
   const [theme, setTheme] = useState<string>(() => {
     if (typeof window === "undefined") return "light";
@@ -195,7 +198,7 @@ export default function Chat() {
         }
       });
 
-        return () => {
+        return (<> {/*__use_roomCode__*/ {(effectiveRoomCode && null)} </> && ) => {
 try { ch.unsubscribe(); } catch {}
       setSubscribed(false);
     };
