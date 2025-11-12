@@ -1,37 +1,67 @@
-"use client";
+'use client';
 import { useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseClient";
 
-function randomCode(len=6){
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({length: len}, ()=> chars[Math.floor(Math.random()*chars.length)]).join("");
+function randomCode(len = 6) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
 }
 
-export default function RoomControls({ currentRoomId, onJoinByCode }:{ currentRoomId: string | null, onJoinByCode:(code:string)=>void }){
-  const [code, setCode] = useState("");
+export default function RoomControls() {
+  const [joinCode, setJoinCode] = useState("");
+  const router = useRouter();
 
-  async function createRoom(){
-    const c = randomCode();
-    const { data: auth } = await supabase.auth.getUser();
-    const owner = auth.user?.id ?? null;
-    const { data, error } = await supabase.from("rooms").insert({ code: c, name: "Private Room", created_by: owner }).select().single();
-    if(error){ alert(error.message); return; }
-    navigator.clipboard.writeText(`${location.origin}/?code=${data.code}`);
-    alert(`Room created! Code: ${data.code}\nInvite link copied to clipboard.`);
-    onJoinByCode(data.code);
+  async function createRoom() {
+    const sb = getSupabase();
+    if (!sb) {
+      alert("Missing Supabase env vars");
+      return;
+    }
+    const code = randomCode();
+    try {
+      const { data: auth } = await sb.auth.getUser();
+      const owner = auth?.user?.id ?? null;
+      const { error } = await sb.from("rooms").insert({ code, name: "Private Room", created_by: owner });
+      if (error && !/relation .* rooms .* does not exist/i.test(error.message)) {
+        console.warn("[rooms] insert failed:", error.message);
+      }
+    } catch (e) {
+      console.warn("[rooms] insert skipped:", (e as Error).message);
+    }
+    router.push(`/room/${code}`);
+  }
+
+  function joinByCode() {
+    const c = joinCode.trim().toUpperCase();
+    if (!c) return;
+    router.push(`/room/${c}`);
   }
 
   return (
-    <div className="p-3 bg-white border-b flex items-center gap-2">
-      <button onClick={createRoom} className="px-3 py-2 text-sm rounded-lg bg-black text-white">Create Private Room</button>
+    <div className="flex items-center gap-2">
+      <button
+        onClick={createRoom}
+        className="h-9 rounded-md border dark:border-neutral-700 bg-black text-white dark:bg-white dark:text-black px-3 text-xs"
+      >
+        Create Private Room
+      </button>
       <input
-        value={code}
-        onChange={e=>setCode(e.target.value.toUpperCase())}
+        value={joinCode}
+        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
         placeholder="Enter room code"
-        className="px-3 py-2 rounded-lg border w-40"
+        className="h-9 w-44 rounded-md border dark:border-neutral-700 bg-white dark:bg-neutral-800 px-2 text-xs"
       />
-      <button onClick={()=>onJoinByCode(code)} className="px-3 py-2 text-sm rounded-lg bg-gray-800 text-white">Join</button>
-      <a href="/?room=global" className="ml-auto text-sm underline">Go to Global</a>
+      <button
+        onClick={joinByCode}
+        disabled={!joinCode.trim()}
+        className="h-9 rounded-md border dark:border-neutral-700 bg-neutral-900 text-white dark:bg-white dark:text-black px-3 text-xs disabled:opacity-50"
+      >
+        Join
+      </button>
+      <a className="text-xs underline ml-2" href="/room/global">Go to Global</a>
     </div>
   );
 }

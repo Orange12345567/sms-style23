@@ -1,0 +1,1 @@
+export type Profile = { name: string; fontFamily: string; color: string; status: string; customStatuses: string[]; bubble: string; };
