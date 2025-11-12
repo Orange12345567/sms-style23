@@ -79,7 +79,7 @@ export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
 
   // messages
   const [messages, setMessages] = useState<Message[]>([]);
-  const [msgIds, setMsgIds] = useState<Set<string>>(new Set());
+  // msgIds removed
 
   // presence/roster (persist offline)
   const [users, setUsers] = useState<UserPresence[]>([]);
@@ -115,14 +115,12 @@ export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
   useEffect(() => {
     const sb = getSupabase?.();
     if (!sb) return;
-    const ch = sb.channel(channelName, { config: { presence: { key: userId } } });
+    const ch = sb.channel(channelName, { config: { broadcast: { self: true }, presence: { key: userId } } });
 
     ch.on("broadcast", { event: "message" }, ({ payload }) => {
-      const m = payload as Message;
-      if (msgIds.has(m.id)) return;
-      setMsgIds(prev => new Set(prev).add(m.id));
-      setMessages(prev => [...prev, m]);
-    })
+        const m = payload as Message;
+        setMessages(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]));
+      })
     .on("broadcast", { event: "delete" }, ({ payload }) => {
       const { id } = payload as { id: string };
       setMessages(prev => prev.filter(m => m.id !== id));
