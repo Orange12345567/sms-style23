@@ -149,7 +149,7 @@ useEffect(() => {
         color: profile.color,
         status: profile.status,
         typing: false,
-    }
+      });
     flat.sort((a, b) => a.name.localeCompare(b.name));
     return flat;
   }, [profile.name, profile.fontFamily, profile.color, profile.status, userId]);
@@ -167,7 +167,8 @@ useEffect(() => {
   // Channel setup
   useEffect(() => {
     if (!supabase) return;
-    const ch = supabase.channel(dmTarget ? `dm:${[userId, dmTarget.userId].sort().join("-")}` : ROOM, { config: { broadcast: { self: false }, presence: { key: userId } } });
+    const channelName = dmTarget ? ("dm:" + [userId, ((dmTarget as any)?.userId || "")].sort().join("-")) : ROOM;
+    const ch = supabase.channel(channelName, { config: { broadcast: { self: false }, presence: { key: userId } } });
     setChannel(ch);
 
     ch
