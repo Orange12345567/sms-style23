@@ -310,7 +310,7 @@ function sendMessage() {
       {showSidebar && (
         <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={()=>setShowSidebar(false)}>
           <div className="absolute left-0 top-0 h-full w-72 bg-white dark:bg-neutral-900" onClick={(e)=>e.stopPropagation()}>
-            <SidebarUsers users={users} meId={userId}  meId={userId} onStartDM={(u)=>setDmTarget(u)} />
+            <SidebarUsers users={users} meId={userId} onStartDM={(u)=>setDmTarget(u)} />
           </div>
         </div>
       )}
