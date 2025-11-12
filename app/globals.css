@@ -19,7 +19,7 @@
 }
 .bubble.them:after {
   left: -6px;
-  border-right: 6px solid #e5e7eb;
+  border-right: 6px solid var(--bubble-them, #e5e7eb);
   border-top: 6px solid transparent;
   border-bottom: 6px solid transparent;
 }
