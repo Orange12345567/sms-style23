@@ -172,7 +172,7 @@ export default function Chat() {
         userId,
         name: profile.name,
         fontFamily: profile.fontFamily,
-        color: profile.color,
+        textColor: profile.color,
         status: profile.status,
         typing: false,
       });
@@ -215,7 +215,7 @@ export default function Chat() {
               userId,
               name: profile.name,
               fontFamily: profile.fontFamily,
-              color: profile.color,
+              textColor: profile.color,
               status: profile.status,
               typing: false
             });
@@ -245,7 +245,7 @@ export default function Chat() {
       userId,
       name: profile.name,
       fontFamily: profile.fontFamily,
-      color: profile.color,
+      textColor: profile.color,
       status: profile.status,
       typing: isTyping
     });
@@ -262,7 +262,7 @@ export default function Chat() {
             userId,
             name: profile.name,
             fontFamily: profile.fontFamily,
-            color: profile.color,
+            textColor: profile.color,
             status: profile.status,
             typing: false
           });
@@ -284,7 +284,7 @@ export default function Chat() {
       name: profile.name,
       content: text,
       fontFamily: profile.fontFamily,
-      color: profile.color,
+      textColor: profile.color,
       bubbleColor: profile.bubble,
       ts: Date.now(),
       isSelf: true
