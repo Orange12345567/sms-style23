@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabaseClient";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import SidebarUsers from "./SidebarUsers";
 import MessageBubble from "./MessageBubble";
+  import GoogleFonts from "./GoogleFonts";
 
 type Message = {
   id: string;
@@ -207,7 +208,8 @@ export default function Chat({ roomCode = "GLOBAL" }: { roomCode?: string }) {
       {/* Main column */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-black border-neutral-800 px-3 py-2">
+        <GoogleFonts />
+          <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-black border-neutral-800 px-3 py-2">
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-semibold">{roomName}</h1>
             <span className="ml-2 rounded bg-neutral-900 px-2 py-0.5 text-[11px]">Code: {roomCode}</span>
